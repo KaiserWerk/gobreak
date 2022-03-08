@@ -25,7 +25,7 @@ type (
 		stateMutex sync.RWMutex
 
 		stats      *Stats
-		statsMutex sync.RWMutex
+		statsMutex sync.RWMutex // brauch ich den?
 
 		cleanupTicker *time.Ticker
 		cleanupMutex  sync.RWMutex
@@ -204,11 +204,20 @@ func (cb *CircuitBreaker) Do(r *http.Request, cl *http.Client) (*http.Response, 
 		return nil, Disallowed{}
 	}
 
+	// make setting stats atomic
+	cb.statsMutex.Lock()
+	defer cb.statsMutex.Unlock()
+
 	// retry policy
 	resp, err := retry(cb.retryAttempts, cb.retryMinDelay, r, client)
 	// deemed successful policy
 	if !cb.deemedSuccessful(err) {
+		cb.statsMutex.Lock()
 		cb.stats.TotalFailures++
+
+		if cb.State() == StateClosed && cb.shouldTrip(cb.Stats()) {
+			cb.setState(StateOpen)
+		}
 		return nil, err
 	}
 
@@ -220,6 +229,7 @@ func (cb *CircuitBreaker) Do(r *http.Request, cl *http.Client) (*http.Response, 
 	}
 
 	cb.stats.Requests++
+	cb.stats.TotalSuccesses++
 
 	return resp, nil
 }
@@ -235,6 +245,9 @@ func (cb *CircuitBreaker) allowRequest() bool {
 	defer cb.stateMutex.RUnlock()
 	if cb.state == StateClosed {
 		return true
+	}
+	if cb.state == StateOpen {
+		return false
 	}
 	if cb.state == StateHalfOpen && cb.maxRequestsHalfOpen > cb.stats.CurrentRequestsHalfOpen {
 		cb.stats.CurrentRequestsHalfOpen++
@@ -264,7 +277,7 @@ func defaultShouldTrip(stats Stats) bool {
 	return stats.ConsecutiveFailures >= 3
 }
 
-func defaultStateChanged(from, to State) { /* does nothing */ }
+func defaultStateChanged(_, _ State) { /* does nothing */ }
 
 func defaultDeemedSuccessful(err error) bool {
 	return err == nil
