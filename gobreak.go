@@ -53,8 +53,8 @@ type (
 		// MaxRequestsHalfOpen is the maximum number of requests allowed to pass through when the CircuitBreaker is half-open.
 		// If MaxRequestsHalfOpen is 0, CircuitBreaker allows only 1 request.
 		MaxRequestsHalfOpen uint64
-		// ResetInterval describes the interval of the closed state for CircuitBreaker to clear the internal Stats, described later
-		// in this section. If Interval is 0, CircuitBreaker doesn't clear the internal Stats during the closed state at all
+		// ResetInterval describes the interval of the closed state for CircuitBreaker to clear the internal Stats.
+		// If Interval is 0, CircuitBreaker doesn't clear the internal Stats during the closed state at all.
 		ResetIntervalClosed time.Duration
 		// period of the open state, after which the state of CircuitBreaker becomes half-open. If WaitUntilHalfOpen is 0,
 		// the default value of 1 minute is used.
@@ -89,7 +89,7 @@ type (
 		ConsecutiveSuccesses    uint64
 		ConsecutiveFailures     uint64
 		CurrentRequestsHalfOpen uint64
-		lastRequestSuccessful   bool
+		LastRequestSuccessful   bool
 	}
 )
 
@@ -101,6 +101,9 @@ const (
 
 // New returns a new *CircuitBreaker. Easy.
 func New(s *Settings, rp *RetryPolicy) *CircuitBreaker {
+	if s == nil {
+		s = &Settings{}
+	}
 	cb := CircuitBreaker{
 		maxRequestsHalfOpen: s.MaxRequestsHalfOpen,
 		resetIntervalClosed: s.ResetIntervalClosed,
